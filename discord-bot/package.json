@@ -1,0 +1,20 @@
+{
+  "name": "aksa-discord-bot",
+  "version": "1.0.0",
+  "description": "AKSA Platform — Discord Presence Bot (Phase 3)",
+  "main": "index.ts",
+  "scripts": {
+    "dev": "tsx watch index.ts",
+    "start": "tsx index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "discord.js": "^14.14.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.6.0",
+    "typescript": "^5.3.0"
+  }
+}

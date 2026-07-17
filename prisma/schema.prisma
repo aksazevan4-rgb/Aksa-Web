@@ -1,0 +1,835 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id                       String              @id @default(cuid())
+  name                     String?
+  email                    String?             @unique
+  emailVerified            DateTime?
+  image                    String?
+  role                     Role                @default(USER)
+  accountStatus            AccountStatus       @default(ACTIVE)
+  lastLoginAt              DateTime?
+  lastSeenAt               DateTime?
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+  password                 String?
+  bannerImage              String?
+  bio                      String?
+  lastLoginIp              String?
+  socialLinks              Json?
+  username                 String?             @unique
+  isFounder                Boolean             @default(false)
+  plan                     Plan                @default(FREE)
+  premiumSince             DateTime?
+  premiumExpiresAt         DateTime?
+  profileTheme             String?
+  profileLayout            String?             @default("classic")
+  profileBackground        Json?
+  profileBorder            String?             @default("none")
+  profileViews             Int                 @default(0)
+  profileVisibility        ProfileVisibility   @default(PUBLIC)
+  discordId                String?             @unique
+  discordLinked            Boolean             @default(false)
+  discordPresenceCache     Json?
+  discordPresenceUpdatedAt DateTime?
+  widgetConfig             Json?
+  profileAccentColor       String?
+  profileFont              String?             @default("inter")
+  discordAccentColor       String?
+  discordBannerUrl         String?
+  discordGlobalName        String?
+  discordUsername          String?
+  onboardingCompleted      Boolean             @default(false)
+  profileType              String?
+  /// * Opt-in — default off so existing users don't suddenly start getting
+  ///    * emailed. Surfaced in Settings > Preferensi Notifikasi.
+  notifyGuestbookEmail     Boolean             @default(false)
+  backgroundAudioUrl       String?
+  /// * Mata uang virtual untuk membeli badge/marketplace item — docs/12 §4
+  credits                  Int                 @default(0)
+  customCursorUrl          String?
+  /// * docs/05 §5 — Security Score: "password diganti dalam 6 bulan terakhir"
+  passwordUpdatedAt        DateTime?
+  /// * { cardOpacity: number (0-100), cardBlur: number (0-80px),
+  ///    * glowUsername/glowSocials/glowBadges: boolean } — read by the public
+  ///    * profile renderer (app/[username]/page.tsx) to apply CSS effects.
+  profileEffects           Json?
+  twoFactorEnabled         Boolean             @default(false)
+  twoFactorEnabledAt       DateTime?
+  /// * Array JSON dari bcrypt hash — setiap kode sekali pakai, dihapus dari
+  ///    * array begitu dipakai (docs/05 §2).
+  twoFactorRecoveryCodes   Json?
+  /// /** CATATAN JUJUR: disimpan apa adanya (tidak dienkripsi tambahan di
+  ///    * level aplikasi), pola yang sama seperti secret/token lain di
+  ///    * codebase ini (mis. tidak ada key-management/rotation infrastructure
+  ///    * tersendiri). Enkripsi-at-rest yang benar butuh strategi pengelolaan
+  ///    * kunci terpisah — item lanjutan, bukan sesuatu yang aman ditebak di
+  ///    * sini tanpa desain matang (lihat catatan sama di docs/16 §7 soal CSP).
+  twoFactorSecret          String?
+  accounts                 Account[]
+  activeTokens             ActiveToken[]
+  apiKeys                  ApiKey[]
+  auditLogs                AuditLog[]          @relation("AuditLogActor")
+  creditTransactions       CreditTransaction[]
+  guestbookEntries         GuestbookEntry[]
+  linkFolders              LinkFolder[]
+  loginEvents              LoginEvent[]
+  media                    Media[]             @relation("MediaUploader")
+  messages                 Message[]
+  notifications            Notification[]
+  profileAliases           ProfileAlias[]
+  links                    ProfileLink[]
+  reactions                ProfileReaction[]
+  templates                ProfileTemplate[]
+  profileViewLogs          ProfileViewLog[]
+  sessions                 Session[]
+  templatePurchases        TemplatePurchase[]
+  templateReviews          TemplateReview[]
+  trustedDevices           TrustedDevice[]
+  badges                   UserBadge[]         @relation("UserBadges")
+
+  @@index([role])
+  @@index([plan])
+  @@map("users")
+}
+
+/// Custom link buttons displayed on the user's public profile page.
+model GuestbookEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  message   String
+  hidden    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("guestbook_entries")
+}
+
+model ProfileReaction {
+  id     String @id @default(cuid())
+  userId String
+  emoji  String
+  count  Int    @default(0)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, emoji])
+  @@map("profile_reactions")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  body      String?
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read, createdAt])
+  @@map("notifications")
+}
+
+model ProfileTemplate {
+  id               String             @id @default(cuid())
+  authorId         String?
+  /// * Set only for platform-provided built-ins (see lib/template-presets.ts),
+  ///    * so ensureBuiltInTemplates() can upsert them idempotently. User-created
+  ///    * templates leave this null.
+  slug             String?            @unique
+  name             String
+  description      String?
+  category         String?
+  visibility       TemplateVisibility @default(PRIVATE)
+  isBuiltIn        Boolean            @default(false)
+  /// * Sekarang benar-benar ditagih lewat Credits saat >0 — lihat
+  ///    * features/marketplace/server/service.ts. Dulu murni informational
+  ///    * sebelum ada payment gateway; Credits system (docs/12 §4) yang
+  ///    * dipakai sekarang, bukan Stripe/QRIS.
+  price            Int?
+  layoutKey        String
+  themeKey         String
+  borderKey        String?
+  fontKey          String?
+  accentColor      String?
+  backgroundConfig Json?
+  widgetConfig     Json?
+  useCount         Int                @default(0)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  /// * docs/14 §5 — hanya jadi true kalau admin mengaktifkan
+  ///    * SiteConfig.requireTemplateModeration DAN author memilih visibility
+  ///    * PUBLIC; kalau moderasi tidak diaktifkan, ini selalu false (perilaku
+  ///    * publish instan existing tidak berubah).
+  pendingReview    Boolean            @default(false)
+  rating           Float?             @default(0)
+  ratingCount      Int                @default(0)
+  author           User?              @relation(fields: [authorId], references: [id])
+  purchases        TemplatePurchase[]
+  reviews          TemplateReview[]
+
+  @@index([visibility, category])
+  @@map("profile_templates")
+}
+
+/// Jejak siapa saja yang sudah "membeli" (atau mengklaim gratis) sebuah
+/// template — dipakai untuk (a) tidak menagih ulang di apply berikutnya,
+/// (b) syarat boleh memberi review (docs/13 §4: hanya yang sudah pernah
+/// pakai). Untuk template gratis, row ini dibuat saat apply pertama kali
+/// tanpa transaksi credit.
+model TemplatePurchase {
+  id         String          @id @default(cuid())
+  userId     String
+  templateId String
+  pricePaid  Int             @default(0)
+  createdAt  DateTime        @default(now())
+  template   ProfileTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, templateId])
+  @@map("template_purchases")
+}
+
+model TemplateReview {
+  id         String          @id @default(cuid())
+  templateId String
+  userId     String
+  rating     Int
+  comment    String?
+  createdAt  DateTime        @default(now())
+  template   ProfileTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, userId])
+  @@map("template_reviews")
+}
+
+model ProfileLink {
+  id             String      @id @default(cuid())
+  userId         String
+  label          String
+  url            String
+  icon           String?
+  order          Int         @default(0)
+  visible        Boolean     @default(true)
+  clicks         Int         @default(0)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  color          String?
+  description    String?
+  openInNewTab   Boolean     @default(true)
+  /// * bcrypt hash — never store the raw password. Null = no password.
+  passwordHash   String?
+  scheduledEnd   DateTime?
+  scheduledStart DateTime?
+  category       String?
+  expireAt       DateTime?
+  folderId       String?
+  /// * { mode: "allow" | "block", countries: string[] } — dicek di redirect handler
+  geoRestriction Json?
+  pinned         Boolean     @default(false)
+  /// * { source?, medium?, campaign? } — di-append ke URL tujuan saat redirect
+  utmParams      Json?
+  folder         LinkFolder? @relation(fields: [folderId], references: [id])
+  user           User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, order])
+  @@index([userId, folderId])
+  @@map("profile_links")
+}
+
+/// Pengelompokan tampilan link di profil publik (docs/08 §4) — terpisah
+/// dari `category` yang dipakai untuk filter kerja internal di dashboard.
+model LinkFolder {
+  id        String        @id @default(cuid())
+  userId    String
+  name      String
+  order     Int           @default(0)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  links     ProfileLink[]
+
+  @@index([userId, order])
+  @@map("link_folders")
+}
+
+/// Daily view/click aggregate per user, used for analytics charts.
+/// Written by lib/profile-views.ts (recordProfileView), rate-limited
+/// per IP+user to resist spam via repeated page loads or direct API calls.
+model ProfileViewLog {
+  id     String   @id @default(cuid())
+  userId String
+  date   DateTime @db.Date
+  views  Int      @default(0)
+  clicks Int      @default(0)
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date])
+  @@map("profile_view_logs")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model LoginEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  success   Boolean
+  method    String
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("login_events")
+}
+
+model ActiveToken {
+  id         String    @id @default(cuid())
+  jti        String    @unique
+  userId     String
+  ipAddress  String?
+  userAgent  String?
+  lastUsedAt DateTime  @default(now())
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  expiresAt  DateTime
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("active_tokens")
+}
+
+/// Defines a plan tier (FREE, PREMIUM, etc.). Admin creates/edits from dashboard.
+model PremiumPlan {
+  id           String               @id @default(cuid())
+  name         String               @unique
+  label        String
+  description  String?
+  price        Int                  @default(0)
+  discountPct  Int                  @default(0)
+  durationDays Int?
+  isActive     Boolean              @default(true)
+  sortOrder    Int                  @default(0)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  features     PremiumPlanFeature[]
+
+  @@map("premium_plans")
+}
+
+/// A single toggleable feature that can be assigned to any plan tier.
+model PremiumFeature {
+  id          String               @id @default(cuid())
+  key         String               @unique
+  label       String
+  description String?
+  category    String?
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  plans       PremiumPlanFeature[]
+
+  @@map("premium_features")
+}
+
+/// Join table: which features belong to which plan.
+model PremiumPlanFeature {
+  planId    String
+  featureId String
+  feature   PremiumFeature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  plan      PremiumPlan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@id([planId, featureId])
+  @@map("premium_plan_features")
+}
+
+/// Global site configuration managed via Admin Dashboard.
+model SiteConfig {
+  id                        String   @id @default("config")
+  siteName                  String   @default("AKSA")
+  siteUrl                   String   @default("https://aksa.example.com")
+  logoUrl                   String?
+  siteTitle                 String   @default("AKSA — Build Your Premium Profile")
+  siteDescription           String   @default("Create a stunning personal profile page. Powered by AKSA.")
+  allowRegistration         Boolean  @default(true)
+  maintenanceMode           Boolean  @default(false)
+  poweredByVisible          Boolean  @default(true)
+  showAksaIdShowcase        Boolean  @default(true)
+  aksaIdDiscordUrl          String?
+  aksaIdDescription         String?
+  socialGithub              String?
+  socialDiscord             String?
+  socialInstagram           String?
+  socialYoutube             String?
+  socialTiktok              String?
+  socialWebsite             String?
+  updatedAt                 DateTime @updatedAt
+  /// * docs/14-admin-panel.md §5 — OFF secara default supaya perilaku
+  ///    * self-service Template Marketplace yang sudah berjalan TIDAK berubah
+  ///    * kecuali admin sengaja mengaktifkan antrian moderasi ini.
+  requireTemplateModeration Boolean  @default(false)
+
+  @@map("site_config")
+}
+
+model Profile {
+  id            String   @id @default("profile")
+  name          String
+  role          String
+  roles         String[]
+  founderOf     String?
+  location      String
+  timezone      String
+  status        String
+  bioParagraphs String[]
+  avatarMediaId String?  @unique
+  updatedAt     DateTime @updatedAt
+  avatarMedia   Media?   @relation("ProfileAvatar", fields: [avatarMediaId], references: [id])
+
+  @@map("profile_singleton")
+}
+
+model EcosystemNode {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  status      String   @default("active")
+  url         String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("ecosystem_nodes")
+}
+
+model Project {
+  id           String         @id @default(cuid())
+  title        String
+  description  String?
+  url          String?
+  repoUrl      String?
+  tags         String[]
+  status       String         @default("active")
+  featured     Boolean        @default(false)
+  order        Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  coverMediaId String?
+  gallery      ProjectImage[]
+  coverMedia   Media?         @relation("ProjectCover", fields: [coverMediaId], references: [id])
+
+  @@map("projects")
+}
+
+model ProjectImage {
+  id        String  @id @default(cuid())
+  projectId String
+  url       String
+  alt       String?
+  order     Int     @default(0)
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@map("project_images")
+}
+
+model Experience {
+  id          String   @id @default(cuid())
+  company     String
+  role        String
+  description String?
+  startDate   String
+  endDate     String?
+  current     Boolean  @default(false)
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("experiences")
+}
+
+model TechItem {
+  id       String  @id @default(cuid())
+  name     String
+  icon     String?
+  category String?
+  order    Int     @default(0)
+
+  @@map("tech_items")
+}
+
+model Testimonial {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  content   String
+  avatarUrl String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("testimonials")
+}
+
+model Stat {
+  id    String @id @default(cuid())
+  label String
+  value String
+  order Int    @default(0)
+
+  @@map("stats")
+}
+
+model Service {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  icon        String?
+  order       Int     @default(0)
+
+  @@map("services")
+}
+
+model FocusItem {
+  id          String  @id @default(cuid())
+  title       String
+  description String?
+  icon        String?
+  order       Int     @default(0)
+
+  @@map("focus_items")
+}
+
+model Settings {
+  id               String   @id @default("settings")
+  siteTitle        String
+  siteDescription  String
+  ogImageMediaId   String?  @unique
+  socialGithub     String?
+  socialDiscord    String?
+  socialWebsite    String?
+  socialSaweria    String?
+  aksaIdDiscordUrl String?
+  socialBagibagi   String?
+  socialInstagram  String?
+  socialTiktok     String?
+  socialYoutube    String?
+  updatedAt        DateTime @updatedAt
+  ogImageMedia     Media?   @relation("SettingsOgImage", fields: [ogImageMediaId], references: [id])
+
+  @@map("settings")
+}
+
+model Media {
+  id            String    @id @default(cuid())
+  url           String
+  publicId      String?
+  resourceType  String    @default("image")
+  format        String?
+  bytes         Int?
+  width         Int?
+  height        Int?
+  uploaderId    String
+  createdAt     DateTime  @default(now())
+  uploader      User      @relation("MediaUploader", fields: [uploaderId], references: [id], onDelete: Cascade)
+  profileAvatar Profile?  @relation("ProfileAvatar")
+  projectCover  Project[] @relation("ProjectCover")
+  settingsOg    Settings? @relation("SettingsOgImage")
+
+  @@map("media")
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  userId    String?
+  name      String
+  email     String
+  subject   String
+  body      String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@map("messages")
+}
+
+model CreditTransaction {
+  id        String                  @id @default(cuid())
+  userId    String
+  /// * Positif = credit masuk, negatif = credit keluar. Saldo akhir tetap
+  ///    * sumber kebenaran di User.credits, ini murni riwayat transaksi.
+  amount    Int
+  reason    CreditTransactionReason
+  /// * Referensi bebas ke entitas terkait — id badge yang dibeli, id
+  ///    * listing marketplace, dst. Tidak pakai foreign key karena bisa
+  ///    * menunjuk ke beberapa jenis entitas berbeda (docs/04 §5 — trade-off
+  ///    * didokumentasikan, bukan diam-diam).
+  relatedId String?
+  note      String?
+  createdAt DateTime                @default(now())
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
+}
+
+model ApiKey {
+  id         String    @id @default(cuid())
+  userId     String
+  name       String
+  /// * 8 karakter pertama, ditampilkan di UI supaya user bisa mengenali key
+  ///    * mana yang mana tanpa perlu tahu secret penuhnya lagi.
+  keyPrefix  String
+  /// * bcrypt hash dari secret penuh — sama seperti ProfileLink.passwordHash,
+  ///    * tidak pernah disimpan mentah.
+  keyHash    String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
+}
+
+model FeatureFlag {
+  id                String   @id @default(cuid())
+  key               String   @unique
+  description       String?
+  enabled           Boolean  @default(false)
+  /// * 0-100 — dipakai untuk rollout bertahap (mis. aktifkan untuk 10% user
+  ///    * dulu). Hash deterministik dari userId dipakai supaya user yang sama
+  ///    * selalu dapat hasil konsisten antar request (docs/14 §8). Diabaikan
+  ///    * (dianggap 100) kalau `enabled=false` — flag tetap harus di-on-kan
+  ///    * secara global dulu sebelum rollout percentage berlaku.
+  rolloutPercentage Int      @default(100)
+  updatedAt         DateTime @updatedAt
+  createdAt         DateTime @default(now())
+
+  @@map("feature_flags")
+}
+
+model TrustedDevice {
+  id         String    @id @default(cuid())
+  userId     String
+  /// * bcrypt hash — sama seperti ApiKey.keyHash, token mentah tidak pernah
+  ///    * disimpan.
+  tokenHash  String
+  userAgent  String?
+  expiresAt  DateTime
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("trusted_devices")
+}
+
+/// Extra vanity URLs that resolve to the same profile as `User.username`
+/// (docs reference: alias-actions.ts). Capped per-user in application code
+/// (MAX_ALIASES_PER_USER); uniqueness enforced here at the DB level so it's
+/// also safe against races between concurrent requests.
+model ProfileAlias {
+  id        String   @id @default(cuid())
+  userId    String
+  alias     String   @unique
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("profile_aliases")
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  actorId    String?
+  action     AuditAction
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  actor      User?       @relation("AuditLogActor", fields: [actorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Badge {
+  id             String      @id @default(cuid())
+  key            String      @unique
+  name           String
+  description    String
+  category       String
+  icon           String
+  rarity         BadgeRarity @default(COMMON)
+  requirement    Json?
+  isAnimated     Boolean     @default(false)
+  isPurchasable  Boolean     @default(false)
+  priceCredits   Int?
+  availableFrom  DateTime?
+  availableUntil DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  userBadges     UserBadge[]
+
+  @@index([category])
+  @@map("badges")
+}
+
+model UserBadge {
+  id          String      @id @default(cuid())
+  userId      String
+  badgeId     String
+  progress    Int         @default(0)
+  unlockedAt  DateTime?
+  equipped    Boolean     @default(false)
+  featured    Boolean     @default(false)
+  acquiredVia BadgeSource @default(SYSTEM)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  badge       Badge       @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  user        User        @relation("UserBadges", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, badgeId])
+  @@index([userId, equipped])
+  @@index([userId, featured])
+  @@map("user_badges")
+}
+
+enum TemplateVisibility {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+enum CreditTransactionReason {
+  ADMIN_GRANT
+  BADGE_PURCHASE
+  MARKETPLACE_PURCHASE
+  REFUND
+  BONUS
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum Plan {
+  FREE
+  PREMIUM
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum AuditAction {
+  USER_LOGIN
+  USER_LOGOUT
+  USER_REGISTER
+  USER_UPDATE
+  USER_DELETE
+  USER_BAN
+  USER_UNBAN
+  USER_PLAN_CHANGE
+  USER_ROLE_CHANGE
+  PROFILE_UPDATE
+  LINK_CREATE
+  LINK_UPDATE
+  LINK_DELETE
+  MEDIA_UPLOAD
+  MEDIA_DELETE
+  CONTENT_UPDATE
+  SETTINGS_UPDATE
+  ADMIN_ACTION
+  USER_STATUS_CHANGE
+  PASSWORD_RESET_REQUEST
+  PASSWORD_RESET_COMPLETE
+  EMAIL_VERIFY_REQUEST
+  EMAIL_VERIFIED
+  EMAIL_CHANGE_REQUEST
+  EMAIL_CHANGE_COMPLETE
+  DISCORD_LINK
+  DISCORD_UNLINK
+  BADGE_GRANT
+  BADGE_REVOKE
+  CREDIT_GRANT
+  API_KEY_CREATE
+  API_KEY_REVOKE
+  TWO_FACTOR_ENABLE
+  TWO_FACTOR_DISABLE
+  FEATURE_FLAG_UPDATE
+  TRUSTED_DEVICE_ADD
+  TRUSTED_DEVICE_REVOKE
+}
+
+enum BadgeRarity {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+  LIMITED
+}
+
+enum BadgeSource {
+  SYSTEM
+  PURCHASE
+  ADMIN_GRANT
+  EVENT
+}
