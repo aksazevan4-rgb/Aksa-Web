@@ -27,8 +27,15 @@ export function SidebarCollapseProvider({ children }: { children: React.ReactNod
   const [collapsed, setCollapsedState] = useState(false);
 
   useEffect(() => {
+    // Intentional one-time sync from localStorage after mount: the initial
+    // state must start `false` to match the server-rendered HTML (localStorage
+    // isn't available during SSR), then get corrected client-side once. This
+    // runs once per provider instance (mounted once at the dashboard root),
+    // so there's no cascading-render loop despite the lint rule's general
+    // concern about setState-in-effect.
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored === "1") setCollapsedState(true);
     } catch {
       // localStorage unavailable (e.g. privacy mode) — just fall back to default.

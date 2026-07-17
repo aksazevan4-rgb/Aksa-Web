@@ -13,35 +13,23 @@
 
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { getSiteConfig } from "@/lib/site-config";
 import { getPlanLabel } from "@/lib/premium";
+import type { OgDataResponse } from "@/app/api/internal/og-data/route";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const username = req.nextUrl.searchParams.get("username");
 
-  const [config] = await Promise.all([getSiteConfig()]);
+  const dataUrl = new URL("/api/internal/og-data", req.nextUrl.origin);
+  if (username) dataUrl.searchParams.set("username", username);
 
-  if (!username) {
-    return defaultOg(config.siteName, config.siteDescription);
+  const res = await fetch(dataUrl, { cache: "no-store" });
+  const { siteName, siteDescription, user }: OgDataResponse = await res.json();
+
+  if (!username || !user) {
+    return defaultOg(siteName, siteDescription);
   }
-
-  const user = await prisma.user.findUnique({
-    where: { username },
-    select: {
-      name: true,
-      username: true,
-      bio: true,
-      image: true,
-      plan: true,
-      role: true,
-      isFounder: true,
-    },
-  });
-
-  if (!user) return defaultOg(config.siteName, config.siteDescription);
 
   const planLabel = getPlanLabel({
     role: user.role,
@@ -187,7 +175,7 @@ export async function GET(req: NextRequest) {
           }}
         >
           <span style={{ fontSize: 18, color: "rgba(255,255,255,0.35)" }}>
-            {config.siteName}
+            {siteName}
           </span>
         </div>
       </div>

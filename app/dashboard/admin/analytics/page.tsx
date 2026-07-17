@@ -1,6 +1,6 @@
 import { verifyAdmin } from "@/lib/dal";
 import { prisma } from "@/lib/prisma";
-import { BarChart3, Globe2, MousePointerClick, TrendingUp, Users } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import {AdminAnalyticsClient,type StatItem,} from "./AdminAnalyticsClient";
 
 function daysAgo(days: number) {
