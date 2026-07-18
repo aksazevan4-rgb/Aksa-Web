@@ -31,7 +31,7 @@ export type OgDataResponse = {
   siteDescription: string;
   user: {
     name: string | null;
-    username: string;
+    username: string | null;
     bio: string | null;
     image: string | null;
     plan: "FREE" | "PREMIUM";

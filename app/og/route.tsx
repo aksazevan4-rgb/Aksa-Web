@@ -130,7 +130,7 @@ export async function GET(req: NextRequest) {
             </h1>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <span style={{ fontSize: 24, color: "rgba(255,255,255,0.5)" }}>
-                @{user.username}
+                @{user.username ?? username}
               </span>
               <span
                 style={{
